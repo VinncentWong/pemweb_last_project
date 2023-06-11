@@ -242,20 +242,14 @@
 
         const addRouteShapeToMap = (route) => {
             route.sections.forEach((section) => {
-                // decode LineString from the flexible polyline
                 const linestring = H.geo.LineString.fromFlexiblePolyline(section.polyline);
-
-                // Create a polyline to display the route:
                 const polyline = new H.map.Polyline(linestring, {
                     style: {
                         lineWidth: 4,
                         strokeColor: 'rgba(0, 128, 255, 0.7)'
                     }
                 });
-
-                // Add the polyline to the map
                 map.addObject(polyline);
-                // And zoom to its bounding rectangle
                 map.getViewModel().setLookAtData({
                     bounds: polyline.getBoundingBox()
                 });
@@ -282,7 +276,6 @@
                 const poly = H.geo.LineString.fromFlexiblePolyline(section.polyline).getLatLngAltArray();
 
                 const actions = section.actions;
-                // Add a marker for each maneuver
                 for (i = 0; i < actions.length; i += 1) {
                     const action = actions[i];
                     const marker = new H.map.Marker({
@@ -299,8 +292,6 @@
                     map.setCenter(evt.target.getGeometry());
                     openBubble(evt.target.getGeometry(), evt.target.instruction);
                 }, false);
-
-                // Add the maneuvers group to the map
                 map.addObject(group);
             });
         }
@@ -348,8 +339,6 @@
                     transportMode: 'car',
                     origin: origin,
                     destination: destination,
-                    // origin: '52.5160,13.3779', // Brandenburg Gate
-                    // destination: '52.5206,13.3862', // Friedrichstraße Railway Station
                     return: 'polyline,turnByTurnActions,actions,instructions,travelSummary'
                 };
 
