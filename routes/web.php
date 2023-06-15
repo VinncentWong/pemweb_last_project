@@ -19,3 +19,5 @@ Route::get('/', function () {
 });
 
 Route::get('/map', [MapController::class, 'map']);
+Route::post("/create/history", [MapController::class, 'saveHistoryData']);
+Route::get("/history/{id}", [MapController::class, 'getHistoryData']);

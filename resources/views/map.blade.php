@@ -32,11 +32,16 @@
                         <input type="text" class="form-control" id="input1">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Calculate shortest distance</button>
+                <button type="submit" class="btn btn-primary">
+                    <div style="display: flex; gap: 1rem;">
+                        <p>Calculate shortest distance</p>
+                        <div id="spinner" class="spinner-border" role="status" style="display: none;"></div>
+                    </div>
+                </button>
             </form>
         </div>
         <div class="mx-3 mb-3" id="summaryData"></div>
-        <div id="panel"></div>
+        <div id="panel" class="mx-3"></div>
         <div style="width: 95vw; height: 80vh;" id="mapContainer" class="mx-3 mb-3"></div>
     </div>
 
@@ -135,13 +140,11 @@
             */
             $("#input0").on('keyup', (e) => {
                 const text = e.currentTarget.value;
-                console.log(`text 0 = ${text}`);
                 $.get(`https://autosuggest.search.hereapi.com/v1/autosuggest?at=52.93175,12.77165&limit=7&lang=en&q=${text}&apiKey=${apiKey}`)
                     .done((r) => {
                         const data = r.items.slice(1, r.items.length - 1).map((v) => {
                             return v.title;
                         });
-                        console.log(`data[0] = ${data}`);
                         $("#input0").autocomplete({
                             source: data,
                             appendTo: "#input0-container",
@@ -159,7 +162,6 @@
             */
             $("#input1").on('keyup', (e) => {
                 const text = e.currentTarget.value;
-                console.log(`text 1 = ${text}`);
                 $.get(`https://autosuggest.search.hereapi.com/v1/autosuggest?at=52.93175,12.77165&limit=7&lang=en&q=${text}&apiKey=${apiKey}`)
                     .done((r) => {
                         const data = r.items.slice(1, r.items.length - 1).map((v) => {
@@ -179,13 +181,11 @@
 
             $("#input0").on("blur", (e) => {
                 const text = e.currentTarget.value;
-                console.log(`text 0 blur = ${text}`);
                 $.get(`https://discover.search.hereapi.com/v1/discover?at=52.93175,12.77165&limit=2&q=${text}&apiKey=${apiKey}`)
                     .done((r) => {
                         const location = r.items[0].position;
                         const lat = location.lat;
                         const lng = location.lng;
-                        console.log(`lat = ${lat}, lng = ${lng} blur 0`);
                         const lastMarker = coordinates[currentIndex];
                         if (currentIndex == 2) {
                             currentIndex = 0;
@@ -202,13 +202,11 @@
 
             $("#input1").on("blur", (e) => {
                 const text = e.currentTarget.value;
-                console.log(`text 1 blur = ${text}`);
                 $.get(`https://discover.search.hereapi.com/v1/discover?at=52.93175,12.77165&limit=2&q=${text}&apiKey=${apiKey}`)
                     .done((r) => {
                         const location = r.items[0].position;
                         const lat = location.lat;
                         const lng = location.lng;
-                        console.log(`lat = ${lat}, lng = ${lng} blur 1`);
                         const lastMarker = coordinates[currentIndex];
                         if (currentIndex == 2) {
                             currentIndex = 0;
@@ -296,23 +294,24 @@
             });
         }
 
-        const addWaypointsToPanel = (route) => {
+        const addWaypointsToPanel = (route, data) => {
             const nodeH3 = document.createElement('h3');
             const labels = [];
 
             route.sections.forEach((section) => {
-                labels.push(
-                    section.turnByTurnActions[0].nextRoad.name[0].value)
-                labels.push(
-                    section.turnByTurnActions[section.turnByTurnActions.length - 1].currentRoad.name[0].value)
+                labels.push(section.turnByTurnActions[0].nextRoad.name[0].value);
+                labels.push(section.turnByTurnActions[section.turnByTurnActions.length - 1].currentRoad.name[0].value);
+                data.history.startLocation = section.turnByTurnActions[0].nextRoad.name[0].value;
+                data.history.destination = section.turnByTurnActions[section.turnByTurnActions.length - 1].currentRoad.name[0].value;
             });
 
             nodeH3.textContent = labels.join(' - ');
             routeInstructionsContainer.innerHTML = '';
             routeInstructionsContainer.appendChild(nodeH3);
+            return data;
         }
 
-        const addSummaryToPanel = (route) => {
+        const addSummaryToPanel = (route, data) => {
             let duration = 0;
             let distance = 0;
 
@@ -330,6 +329,9 @@
             summaryDiv.style.marginRight = '5%';
             summaryDiv.innerHTML = content;
             routeInstructionsContainer.appendChild(summaryDiv);
+            data.history.totalTime = toMMSS(duration);
+            data.history.totalDistance = distance + "m";
+            return data;
         }
 
         const calculateRoutes = (platform, origin, destination) => {
@@ -350,19 +352,36 @@
         };
 
         const onSuccess = (result) => {
+            const data = {
+                "history" : {},
+                "instruction" : []
+            };
             const route = result.routes[0];
             addRouteShapeToMap(route);
             addManueversToMap(route);
-            addWaypointsToPanel(route);
-            addManueversToPanel(route);
-            addSummaryToPanel(route);
+            const res1 = addWaypointsToPanel(route, data);
+            const res2 = addManueversToPanel(route, res1);
+            const res3 = addSummaryToPanel(route, res2);
+            console.log(`res3 = ${JSON.stringify(res3)}`);
+            insertDataIntoDatabase(res3);
+        }
+
+        const insertDataIntoDatabase = (data) => {
+            $.ajax({
+                type: "POST",
+                url: "http://localhost:8000/create/history",
+                data: data,
+                success: (d) => {
+                    console.log(`server berhasil mengirikan data`);
+                }
+            });
         }
 
         const onError = (e) => {
             console.log(console.log(`error calculating shortest distance = ${e}`));
         }
 
-        const addManueversToPanel = (route) => {
+        const addManueversToPanel = (route, data) => {
             var nodeOL = document.createElement('ol');
 
             nodeOL.style.fontSize = 'small';
@@ -377,6 +396,7 @@
                     const spanInstruction = document.createElement('span');
                     spanArrow.className = 'arrow ' + (action.direction || '') + action.action;
                     spanInstruction.innerHTML = section.actions[idx].instruction;
+                    data.instruction.push(section.actions[idx].instruction);
                     li.appendChild(spanArrow);
                     li.appendChild(spanInstruction);
 
@@ -384,6 +404,7 @@
                 });
             });
             routeInstructionsContainer.appendChild(nodeOL);
+            return data;
         }
 
 
@@ -393,6 +414,7 @@
 
         $('form').submit(async (e) => {
             e.preventDefault();
+            $("#spinner").css("display", "block");
             const location1 = $("#input0").val();
             const location2 = $("#input1").val();
             const res1 = await fetch(`https://discover.search.hereapi.com/v1/discover?at=52.93175,12.77165&limit=2&q=${location1}&apiKey=${apiKey}`, {
@@ -409,9 +431,9 @@
             const locationRes2 = jsonRes2.items[0].position;
             const lat2 = locationRes2.lat;
             const lng2 = locationRes2.lng;
-            console.log(`lat1 lng1 = ${lat1},${lng1}`);
-            console.log(`lat2 lng2 = ${lat2},${lng2}`);
             await calculateRoutes(platform, `${lat1},${lng1}`, `${lat2},${lng2}`);
+            $("#spinner").css("display", "none");
+            $("input").val("");
         })
     </script>
 </body>
